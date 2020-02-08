@@ -3,7 +3,8 @@ import threading
 import platform
 import subprocess
 import time
-import logging
+
+
 
 
 class PlaylistFolderScanner(object):
@@ -17,7 +18,7 @@ class PlaylistFolderScanner(object):
         self.sync = False
 
     def enable_rsync(self, smb_path, smb_username, smb_password):
-        self.mount = MountFolder(self.remote_path, smb_path, smb_username, smb_password)
+        self.mount = MountSMBFolder(self.remote_path, smb_path, smb_username, smb_password)
         threading.Thread(target=self.rsync, daemon=True).start()
         self.sync = True
 
@@ -26,25 +27,30 @@ class PlaylistFolderScanner(object):
         remote_path_folder = os.listdir(self.remote_path)
         self.playlist = []
         if self.sync:
+            print('get remote')
             for local_item in local_path_folder:
                 if local_item in remote_path_folder:
                     self.playlist.append("{0}/{1}".format(self.local_path, local_item))
         else:
+            print('get local')
             for local_item in local_path_folder:
                 self.playlist.append("{0}/{1}".format(self.local_path, local_item))
         return self.playlist
 
     def rsync(self):
         while True:
+            print('start sync')
             self.sync = self.mount.has_sync()
             if self.sync:
-                subprocess.call(
-                    ['rsync', '-az', '--delete', "{0}/".format(self.remote_path), "{0}/".format(self.local_path)])
-                print("SYNC")
-                time.sleep(3)
+                try:
+                    subprocess.call(
+                        ['rsync', '-avz', '--delete', "{0}/".format(self.remote_path), "{0}/".format(self.local_path)])
+                except:
+                    print("error sync")
+            time.sleep(TIME_LIMIT)
 
 
-class MountFolder(object):
+class MountSMBFolder(object):
 
     def __init__(self, remote_path, smb_path, smb_username, smb_password):
         self.smb_path = smb_path
@@ -53,21 +59,24 @@ class MountFolder(object):
         self.host = smb_path.split('\\')[2]
         self.remote_path = remote_path
         self.has_trouble = True
+        self.mount_remote()
         self.monitor = threading.Thread(target=self.monitor_thread, daemon=True)
         self.__loop_monitor = True
         self.monitor.start()
 
     def monitor_thread(self):
         while self.__loop_monitor:
-            if not self.ping() or not self.mount_remote():
-                logging.error("network error")
+            if not self.ping() or not self.is_mounted():
+                print('network error')
                 self.has_trouble = True
+                if not self.is_mounted():
+                    self.mount_remote()
             else:
                 self.has_trouble = False
-            time.sleep(1)
+            time.sleep(TIME_LIMIT)
 
     def has_sync(self):
-        return self.has_trouble
+        return not self.has_trouble
 
     def is_mounted(self):
         rp = subprocess.Popen("sudo mount | grep {0}".format(self.remote_path), stdout=subprocess.PIPE, shell=True)
@@ -79,6 +88,7 @@ class MountFolder(object):
 
     def mount_remote(self):
         if self.ping() and not self.is_mounted():
+            print('mount cifs')
             smb_path = self.smb_path.replace('\\', '/')
             smb_mount = "sudo mount -t cifs -o vers=2.1,username={0},password={1} {2} {3}" \
                 .format(self.smb_username, self.smb_password, smb_path, self.remote_path).split(" ")
@@ -95,7 +105,6 @@ class MountFolder(object):
 class MediaKiosk(object):
 
     def __init__(self, base_path="/home/pi/kiosk", smb_path="", smb_username="", smb_password=""):
-        logging.basicConfig(filename='kiosk.log', level=logging.INFO)
         self.is_alive = True
         self.local_path = "{0}/{1}".format(base_path, 'src')
         self.remote_path = "{0}/{1}".format(base_path, 'dst')
@@ -113,6 +122,7 @@ class MediaKiosk(object):
         self.is_alive = True
         while self.is_alive:
             playlist = self.scanner.make_playlist()
+            print(playlist)
             for item in playlist:
                 spc = subprocess.Popen("omxplayer -p -o hdmi {0}".format(item), stdin=subprocess.PIPE,
                                        stdout=subprocess.PIPE,
@@ -121,5 +131,8 @@ class MediaKiosk(object):
                 spc.stdin.write(b'q')
 
 
-
-
+kiosk = MediaKiosk(base_path="/home/pi/kiosk",
+                   smb_path=SMB_PATH,
+                   smb_username=SMB_USER,
+                   smb_password=SMB_PASSWORD)
+kiosk.start()
