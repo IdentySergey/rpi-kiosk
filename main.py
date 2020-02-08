@@ -4,7 +4,11 @@ import platform
 import subprocess
 import time
 
-
+TIME_LIMIT = 10
+SMB_PATH = "\\\\"
+SMB_USER = ""
+SMB_PASSWORD = ""
+BASE_PATH = ""  # "/home/pi/kiosk"
 
 
 class PlaylistFolderScanner(object):
