@@ -5,7 +5,7 @@ import subprocess
 import time
 
 TIME_LIMIT = 10
-SMB_PATH = "\\\\"
+SMB_PATH = "\\\\doc\\kiosk$"
 SMB_USER = ""
 SMB_PASSWORD = ""
 BASE_PATH = ""  # "/home/pi/kiosk"
@@ -44,8 +44,7 @@ class PlaylistFolderScanner(object):
     def rsync(self):
         while True:
             print('start sync')
-            self.sync = self.mount.has_sync()
-            if self.sync:
+            if self.mount.has_sync():
                 try:
                     subprocess.call(
                         ['rsync', '-avz', '--delete', "{0}/".format(self.remote_path), "{0}/".format(self.local_path)])
@@ -135,8 +134,9 @@ class MediaKiosk(object):
                 spc.stdin.write(b'q')
 
 
-kiosk = MediaKiosk(base_path="/home/pi/kiosk",
-                   smb_path=SMB_PATH,
-                   smb_username=SMB_USER,
-                   smb_password=SMB_PASSWORD)
-kiosk.start()
+if __name__ == '__main__':
+    kiosk = MediaKiosk(base_path="/home/pi/kiosk",
+                       smb_path=SMB_PATH,
+                       smb_username=SMB_USER,
+                       smb_password=SMB_PASSWORD)
+    kiosk.start()
